@@ -42,7 +42,7 @@ if ($oids) {
             $split = trim(explode(' ', $data)[0]);
             $value = trim(explode(' ', $data)[1]);
             $si = explode('.', $split)[14]; //Script Index
-	    // Script name is "LNMS_vlans"
+			// Script name is "LNMS_vlans"
             if ($value == 'LNMS_vlans') {
                 $sIndex = $si;
             }
@@ -66,34 +66,34 @@ if (isset($sIndex)) {
         if ($oldId != $vId) {
             $oldId = $vId;
 
-	    //add vlan ID to $device array
+			//add vlan ID to $device array
             $device['vlans'][1][$vId] = $vId;
 
-	    //try to get existing data
-	    $old_data = Vlan::where('device_id', $device['device_id'])->where('vlan_vlan', $vId)->get()->first->toArray();
+			//try to get existing data
+			$old_data = Vlan::where('device_id', $device['device_id'])->where('vlan_vlan', $vId)->get()->first->toArray();
 
             if (isset($old_data)) {
                 if ($old_data->vlan_name != $vName) {
-		    Vlan::where('device_id', $device['device_id'])->where('vlan_vlan', $vId)->update(array('vlan_name'=>$vName,));
-		    Log::event('Vlan id: ' . $vId . ' changed name to: ' . $vName, $device['device_id'], 'vlan', 4);
+					Vlan::where('device_id', $device['device_id'])->where('vlan_vlan', $vId)->update(array('vlan_name'=>$vName,));
+					Log::event('Vlan id: ' . $vId . ' changed name to: ' . $vName, $device['device_id'], 'vlan', 4);
                 }
             } else {
-	        $new_data = new Vlan;
-        	$new_data->device_id = $device['device_id'];
-        	$new_data->vlan_domain = 1;
-        	$new_data->vlan_vlan = $vId;
-        	$new_data->vlan_name = $vName;
-		$new_data->save();
-		Log::event('Vlan id: ' . $vId . ' added', $device['device_id'], 'vlan', 4);
+			$new_data = new Vlan;
+			$new_data->device_id = $device['device_id'];
+			$new_data->vlan_domain = 1;
+			$new_data->vlan_vlan = $vId;
+			$new_data->vlan_name = $vName;
+			$new_data->save();
+			Log::event('Vlan id: ' . $vId . ' added', $device['device_id'], 'vlan', 4);
             }
         }
 
-	//find ifIndex connected to ifName
+		//find ifIndex connected to ifName
         $port = Port::where('device_id', $device['device_id'])->where('ifName', $vIf)->get()->first->toArray();
         $ifIndex = $port->ifIndex;
         d_echo("\n ifIndex from DB: $ifIndex \n");
 
-	//populate per_vlan_data
+		//populate per_vlan_data
         if ($vType == 'U') {
             $per_vlan_data[$vId][$ifIndex]['untagged'] = 1;
         } else {
