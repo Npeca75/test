@@ -24,10 +24,12 @@
 
 // Discovery module using ROS ability to start script execution through SNMP.
 // This way, script called "LNMS_vlans" could start and send data about vlans on device
-// data format is: T/U,vlanId,ifName
-// for ex: T,254,ether1 is translated to: tagged vlan 254 on ether1
-// Script is first reading /interface/bridge/vlan filtering data, parsing one by one vlanId's
-// After bridge parsing, script continue with plain interfaces (out of bridge)
+// data format is: type,vlanId,ifName <cr>
+// i.e: T,254,ether1 is translated to: tagged vlan 254 on ether1
+
+use App\Models\Vlan;
+use App\Models\Port;
+use log;
 
 $oids = snmp_walk($device, '.1.3.6.1.4.1.14988.1.1.8.1.1.2', '-Osqn', '');
 $oids = trim($oids);
@@ -40,6 +42,7 @@ if ($oids) {
             $split = trim(explode(' ', $data)[0]);
             $value = trim(explode(' ', $data)[1]);
             $si = explode('.', $split)[14]; //Script Index
+	    // Script name is "LNMS_vlans"
             if ($value == 'LNMS_vlans') {
                 $sIndex = $si;
             }
@@ -53,38 +56,44 @@ if (isset($sIndex)) {
     $data = snmp_get($device, '.1.3.6.1.4.1.14988.1.1.18.1.1.2.'.$sIndex, '-Ovq', '');
     $data = trim($data);
     $oldId = 0;
+
     foreach (preg_split("/((\r?\n)|(\r\n?))/", $data) as $line) {
         $vType = trim(explode(',', $line)[0]);
         $vId = trim(explode(',', $line)[1]);
         $vIf = trim(explode(',', $line)[2]);
         $vName = 'Vlan_'.$vId;
+
         if ($oldId != $vId) {
             $oldId = $vId;
+
+	    //add vlan ID to $device array
             $device['vlans'][1][$vId] = $vId;
 
-            $old_data = dbFetchRow('select * FROM vlans where `device_id` = ? AND `vlan_vlan` = ? AND `vlan_domain` = ?', [$device['device_id'], $vId, 1]);
+	    //try to get existing data
+	    $old_data = Vlan::where('device_id', $device['device_id'])->where('vlan_vlan', $vId)->get()->first->toArray();
+
             if (isset($old_data)) {
-                if ($old_data['vlan_name'] != $vName) {
-                    $vlan_upd['vlan_name'] = $vName;
-                    dbUpdate($vlan_upd, 'vlans', '`vlan_id` = ?', [$vId]);
-                    echo 'U';
-                } else {
-                    echo '.';
+                if ($old_data->vlan_name != $vName) {
+		    Vlan::where('device_id', $device['device_id'])->where('vlan_vlan', $vId)->update(array('vlan_name'=>$vName,));
+		    Log::event('Vlan id: ' . $vId . ' changed name to: ' . $vName, $device['device_id'], 'vlan', 4);
                 }
             } else {
-                dbInsert([
-                    'device_id'   => $device['device_id'],
-                    'vlan_domain' => 1,
-                    'vlan_vlan'   => $vId,
-                    'vlan_name'   => $vName,
-                    'vlan_type'   => ['NULL'],
-                ], 'vlans');
-                echo '+';
+	        $new_data = new Vlan;
+        	$new_data->device_id = $device['device_id'];
+        	$new_data->vlan_domain = 1;
+        	$new_data->vlan_vlan = $vId;
+        	$new_data->vlan_name = $vName;
+		$new_data->save();
+		Log::event('Vlan id: ' . $vId . ' added', $device['device_id'], 'vlan', 4);
             }
         }
-        $port = dbFetchRow('select * FROM ports WHERE `device_id` = ? AND `ifName` = ?', [$device['device_id'], $vIf]);
-        $ifIndex = $port['ifIndex'];
+
+	//find ifIndex connected to ifName
+        $port = Port::where('device_id', $device['device_id'])->where('ifName', $vIf)->get()->first->toArray();
+        $ifIndex = $port->ifIndex;
         d_echo("\n ifIndex from DB: $ifIndex \n");
+
+	//populate per_vlan_data
         if ($vType == 'U') {
             $per_vlan_data[$vId][$ifIndex]['untagged'] = 1;
         } else {
