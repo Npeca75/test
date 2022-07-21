@@ -1,0 +1,19 @@
+name: DockerPush
+on: [push] # When pushing to any branch then run this action
+# Env variable
+env:
+  DOCKER_USER: ${{secrets.DOCKER_USER}}
+  DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
+  REPO_NAME: ${{secrets.REPO_NAME}}
+jobs:
+  push-81-to-docker-hub:  # job name
+    runs-on: ubuntu-20.04  # runner name
+    steps:
+    - uses: actions/checkout@v2 # first action : checkout source code
+    - name: docker login
+      run: | # log into docker hub account
+        docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
+    - name: Build the Docker image # push The image to the docker hub
+      run: docker build . --file ./private/config/Dockerfile81 --tag $DOCKER_USER/$REPO_NAME:81
+    - name: Docker Push
+      run: docker push $DOCKER_USER/$REPO_NAME:81
